@@ -1,0 +1,36 @@
+name: Build, Scan, Push
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # allows pushing to GHCR with the built-in token
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t ghcr.io/${{ github.repository_owner }}/secure-demo:${{ github.sha }} ./app
+
+      - name: Trivy vulnerability scan (the supply chain gate)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/secure-demo:${{ github.sha }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"        # any CRITICAL or HIGH finding fails the pipeline
+          ignore-unfixed: true  # only flag vulns that actually have a fix available
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push image (only runs if the scan passed)
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/secure-demo:${{ github.sha }}
+          docker tag ghcr.io/${{ github.repository_owner }}/secure-demo:${{ github.sha }} ghcr.io/${{ github.repository_owner }}/secure-demo:latest
+          docker push ghcr.io/${{ github.repository_owner }}/secure-demo:latest
