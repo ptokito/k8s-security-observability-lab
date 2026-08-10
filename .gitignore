@@ -2,3 +2,4 @@
 *.tfstate
 *.tfstate.backup
 agent/audit.log
+agent/audit.log
